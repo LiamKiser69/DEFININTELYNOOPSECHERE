@@ -50,13 +50,27 @@ def format_html_text(text):
     # 1. Normalize line breaks: convert pre-rendered <br> tags to standard newlines
     text = re.sub(r"<br\s*/?>", "\n", text, flags=re.IGNORECASE)
 
-    # 2. Strip pre-rendered HTML tags entirely (spans, links) to obtain clean raw text
+    # 2. Extract and preserve styled spans (e.g. glowing text) to avoid stripping them
+    spans = []
+
+    def save_span(match):
+        spans.append(match.group(0))
+        return f"___PRESERVED_SPAN_{len(spans)-1}___"
+
+    text = re.sub(
+        r'<span\s+style="[^"]*"\s*>.*?</span>',
+        save_span,
+        text,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+
+    # 3. Strip other pre-rendered raw HTML tags (e.g., raw <a> tags)
     text = re.sub(r"<[^>]+>", "", text)
 
-    # 3. Unescape HTML entities (&gt; -> >, &lt; -> <, &quot; -> ", etc.)
+    # 4. Unescape HTML entities (&gt; -> >, &lt; -> <, &quot; -> ", etc.)
     text = html.unescape(text)
 
-    # 4. Clean up Windows carriage returns (\r\n -> \n)
+    # 5. Clean up Windows carriage returns (\r\n -> \n)
     text = text.replace("\r", "")
 
     lines = text.split("\n")
@@ -93,6 +107,20 @@ def format_html_text(text):
     text = re.sub(r"\|\|([^|]+)\|\|", r'<span class="spoiler">\1</span>', text)
     text = re.sub(r"~([^~]+)~", r'<span class="rainbow">\1</span>', text)
 
+    # Markdown shortcode for custom glowing text: ++text++
+    text = re.sub(
+        r"\+\+([^+]+)\+\+",
+        r'<span class="glow-text">\1</span>',
+        text,
+    )
+
+    # Convert raw URLs into clickable dark grey links (excluding URLs inside existing HTML tags)
+    text = re.sub(
+        r"(?i)\b(https?://[^\s<]+)(?![^<]*>)",
+        r'<a href="\1" target="_blank" rel="noopener noreferrer" class="dark-grey-link">\1</a>',
+        text,
+    )
+
     # Replace keywords safely outside existing HTML tags
     text = re.sub(
         r"(?i)\bsupersage\b(?![^<]*>)",
@@ -102,6 +130,10 @@ def format_html_text(text):
     text = re.sub(
         r"(?i)\bsage\b(?![^<]*>)", r'<span class="sagetext">sage</span>', text
     )
+
+    # Restore preserved styled spans
+    for i, original_span in enumerate(spans):
+        text = text.replace(f"___PRESERVED_SPAN_{i}___", original_span)
 
     return text
 
@@ -254,7 +286,7 @@ HTML_TEMPLATE = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LibertyParty</title>
+    <title>Larty Board Viewer</title>
     <link rel="icon" type="image/png" href="https://lartywiki.ct.ws/images/c/c9/Logo.png">
     <style>
         * {
@@ -310,6 +342,15 @@ HTML_TEMPLATE = """
             color: #166534 !important;
         }
 
+        .dark-grey-link {
+            color: #374151 !important;
+            text-decoration: underline !important;
+            word-break: break-all;
+        }
+        .dark-grey-link:hover {
+            color: #111827 !important;
+        }
+
         .reply-header {
             display: flex;
             justify-content: space-between;
@@ -361,6 +402,10 @@ HTML_TEMPLATE = """
         .rainbow { color: #b45309 !important; }
         .supersagetext { color: #dc2626 !important; font-weight: bold !important; }
         .sagetext { color: #6b7280 !important; font-weight: bold !important; }
+        .glow-text {
+            color: #39ff14 !important;
+            text-shadow: 0 0 5px #39ff14, 0 0 9px #39ff14;
+        }
         
         .spoiler { background-color: #000000; color: #000000; cursor: pointer; }
         .spoiler:hover { color: #ffffff; }
@@ -496,7 +541,7 @@ HTML_TEMPLATE = """
 <body>
     <div class="container">
         <div class="nav-bar">
-            <h1 id="page-title" style="margin: 0;"BEST LARTTY CLIENT EVERRR</h1>
+            <h1 id="page-title" style="margin: 0;">BEST LARTTY CLIENT EVERRR</h1>
         </div>
 
         <div class="banner-container">
@@ -763,7 +808,7 @@ HTML_TEMPLATE = """
                     const challenge = powData.data.challenge;
                     const difficulty = powData.data.difficulty || 4;
                     statusEl.innerText = `Solving PoW (Difficulty: ${difficulty})...`;
-                    const nonce = await solvePoW(challenge, difficulty);
+                    const nonce = await solvePow(challenge, difficulty);
                     statusEl.innerText = 'PoW solved! Submitting final payload...';
                     formData.append('pow_challenge', challenge); formData.append('pow_nonce', nonce);
                     response = await fetch('/api/new-thread', { method: 'POST', body: formData });
