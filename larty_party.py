@@ -57,7 +57,7 @@ def format_html_text(text, is_raw_plain_text=False):
         text = html.unescape(text)
 
     # Clean up line endings & remove server markers
-    text = text.replace("\r\n", "\n").replace("\r", "").replace("", "")
+    text = text.replace("\r\n", "\n").replace("\r", "").replace("(YOU)", "")
 
     lines = text.split("\n")
     processed_lines = []
@@ -213,6 +213,11 @@ def post_reply():
     form_data = request.form.to_dict()
     thread_id = form_data.get("thread_id", "")
 
+    # Handle custom session_id cookie if provided
+    session_id = form_data.pop("session_id", "").strip()
+    if session_id:
+        session.cookies.set("session_id", session_id, domain="larty.party")
+
     headers = {
         **BASE_HEADERS,
         "Referer": f"https://larty.party/thread/{thread_id}",
@@ -244,6 +249,12 @@ def post_reply():
 def post_thread():
     url = "https://larty.party/api/board/new-thread"
     form_data = request.form.to_dict()
+
+    # Handle custom session_id cookie if provided
+    session_id = form_data.pop("session_id", "").strip()
+    if session_id:
+        session.cookies.set("session_id", session_id, domain="larty.party")
+
     headers = {**BASE_HEADERS, "Referer": "https://larty.party/board"}
     csrf_token = session.cookies.get("csrf_token")
     if csrf_token:
@@ -558,7 +569,7 @@ HTML_TEMPLATE = """
             width: 100%;
         }
 
-        .tag-option:hover:not(.disabled) {
+        .tag-option.hover:not(.disabled) {
             background-color: #fde047;
         }
 
@@ -593,7 +604,7 @@ HTML_TEMPLATE = """
 <body>
     <div class="container">
         <div class="nav-bar">
-            <h1 id="page-title" LARTTY CLIENT EVERRR</h1>
+            <h1 id="page-title">LARTTY CLIENT EVERRR</h1>
         </div>
 
         <div class="banner-container">
@@ -604,6 +615,12 @@ HTML_TEMPLATE = """
             <button id="back-btn" class="back-btn" onclick="showBoardIndex()">Return</button>
         </div>
         
+        <!-- Auth / Session Config Section -->
+        <div style="background: #fde047; border: 1px solid #ca8a04; padding: 10px 15px; margin-bottom: 15px; color: #713f12;">
+            <label for="global-session-id" style="font-size: 0.9em; font-weight: bold; display: block; margin-bottom: 5px;">Account Session ID (Cookie):</label>
+            <input type="text" id="global-session-id" placeholder="Paste session_id cookie here to bypass PoW challenge..." style="width: 100%; padding: 6px; background: #fef08a; border: 1px solid #ca8a04; color: #000000; font-family: Arial, sans-serif; outline: none;" />
+        </div>
+
         <div id="post-form-container" class="post-form">
             <input type="text" id="post-title" placeholder="Subject" />
             <textarea id="post-content" placeholder="Description here..."></textarea>
@@ -762,6 +779,7 @@ HTML_TEMPLATE = """
         async function submitReply(threadId) {
             const content = document.getElementById('reply-content').value.trim();
             const anonName = document.getElementById('reply-name').value.trim() || 'Chud';
+            const sessionId = document.getElementById('global-session-id').value.trim();
             const statusEl = document.getElementById('reply-status');
             const submitBtn = document.getElementById('reply-submit-btn');
 
@@ -781,10 +799,14 @@ HTML_TEMPLATE = """
                 formData.append('content', content);
                 formData.append('is_anon', '1');
                 formData.append('anon_name', anonName);
+                if (sessionId) {
+                    formData.append('session_id', sessionId);
+                }
 
                 let response = await fetch('/api/reply', { method: 'POST', body: formData });
                 let result = await response.json();
 
+                // If session_id wasn't provided or didn't bypass, handle PoW challenge fallback
                 if (result.status === 428) {
                     statusEl.innerText = 'Challenge required. Fetching PoW params...';
                     
@@ -883,18 +905,31 @@ HTML_TEMPLATE = """
             const content = document.getElementById('post-content').value.trim();
             const tags = selectedPostTags.join(',');
             const anonName = document.getElementById('post-name').value.trim() || 'Chud';
+            const sessionId = document.getElementById('global-session-id').value.trim();
             const statusEl = document.getElementById('post-status');
             const submitBtn = document.getElementById('post-submit-btn');
+
             if (!title) { statusEl.innerText = 'Title cannot be empty.'; statusEl.style.color = '#dc2626'; return; }
             if (!content) { statusEl.innerText = 'Content cannot be empty.'; statusEl.style.color = '#dc2626'; return; }
-            submitBtn.disabled = true; statusEl.style.color = '#713f12';
+            
+            submitBtn.disabled = true; 
+            statusEl.style.color = '#713f12';
+            
             try {
                 statusEl.innerText = 'Initiating post request...';
                 let formData = new FormData();
-                formData.append('title', title); formData.append('content', content);
-                formData.append('tags', tags); formData.append('is_anon', '1'); formData.append('anon_name', anonName);
+                formData.append('title', title); 
+                formData.append('content', content);
+                formData.append('tags', tags); 
+                formData.append('is_anon', '1'); 
+                formData.append('anon_name', anonName);
+                if (sessionId) {
+                    formData.append('session_id', sessionId);
+                }
+
                 let response = await fetch('/api/new-thread', { method: 'POST', body: formData });
                 let result = await response.json();
+
                 if (result.status === 428) {
                     statusEl.innerText = 'Challenge required. Fetching PoW params...';
                     const powRes = await fetch('/api/pow-challenge');
@@ -905,21 +940,33 @@ HTML_TEMPLATE = """
                     statusEl.innerText = `Solving PoW (Difficulty: ${difficulty})...`;
                     const nonce = await solvePoW(challenge, difficulty);
                     statusEl.innerText = 'PoW solved! Submitting final payload...';
-                    formData.append('pow_challenge', challenge); formData.append('pow_nonce', nonce);
+                    formData.append('pow_challenge', challenge); 
+                    formData.append('pow_nonce', nonce);
                     response = await fetch('/api/new-thread', { method: 'POST', body: formData });
                     result = await response.json();
                 }
+
                 if (result.status === 200) {
-                    statusEl.innerText = 'Thread posted successfully!'; statusEl.style.color = '#15803d';
-                    document.getElementById('post-title').value = ''; document.getElementById('post-content').value = '';
+                    statusEl.innerText = 'Thread posted successfully!'; 
+                    statusEl.style.color = '#15803d';
+                    document.getElementById('post-title').value = ''; 
+                    document.getElementById('post-content').value = '';
                     selectedPostTags = [];
                     initTagPicker();
                     setTimeout(() => {
                         showBoardIndex();
                     }, 1000);
-                } else { statusEl.innerText = `Error posting thread (HTTP ${result.status})`; statusEl.style.color = '#dc2626'; }
-            } catch (err) { console.error(err); statusEl.innerText = 'Error submitting thread.'; statusEl.style.color = '#dc2626'; }
-            finally { submitBtn.disabled = false; }
+                } else { 
+                    statusEl.innerText = `Error posting thread (HTTP ${result.status})`; 
+                    statusEl.style.color = '#dc2626'; 
+                }
+            } catch (err) { 
+                console.error(err); 
+                statusEl.innerText = 'Error submitting thread.'; 
+                statusEl.style.color = '#dc2626'; 
+            } finally { 
+                submitBtn.disabled = false; 
+            }
         }
 
         async function openThread(threadId, silent = false) {
