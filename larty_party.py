@@ -57,7 +57,7 @@ def format_html_text(text, is_raw_plain_text=False):
         text = html.unescape(text)
 
     # Clean up line endings & remove server markers
-    text = text.replace("\r\n", "\n").replace("\r", "").replace("(YOU)", "")
+    text = text.replace("\r\n", "\n").replace("\r", "").replace("", "")
 
     lines = text.split("\n")
     processed_lines = []
