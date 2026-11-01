@@ -604,7 +604,7 @@ HTML_TEMPLATE = """
 <body>
     <div class="container">
         <div class="nav-bar">
-            <h1 id="page-title">LARTTY CLIENT EVERRR</h1>
+            <h1 id="page-title"LARTTY CLIENT EVERRR</h1>
         </div>
 
         <div class="banner-container">
@@ -617,8 +617,8 @@ HTML_TEMPLATE = """
         
         <!-- Auth / Session Config Section -->
         <div style="background: #fde047; border: 1px solid #ca8a04; padding: 10px 15px; margin-bottom: 15px; color: #713f12;">
-            <label for="global-session-id" style="font-size: 0.9em; font-weight: bold; display: block; margin-bottom: 5px;">Account Session ID (Cookie):</label>
-            <input type="text" id="global-session-id" placeholder="Paste session_id cookie here to bypass PoW challenge..." style="width: 100%; padding: 6px; background: #fef08a; border: 1px solid #ca8a04; color: #000000; font-family: Arial, sans-serif; outline: none;" />
+            <label for="global-session-id" style="font-size: 0.9em; font-weight: bold; display: block; margin-bottom: 5px;">Account Session ID (Cookie, DO NOT LEAK THIS UNLESS YOU ARE AN OPSECDEITY):</label>
+            <input type="text" id="global-session-id" placeholder="Paste session_id cookie here to use an account..." style="width: 100%; padding: 6px; background: #fef08a; border: 1px solid #ca8a04; color: #000000; font-family: Arial, sans-serif; outline: none;" />
         </div>
 
         <div id="post-form-container" class="post-form">
